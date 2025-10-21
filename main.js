@@ -1,7 +1,8 @@
 class SlideDeckApp {
-  constructor(root, source) {
+
+  constructor(root, sourcePath) {
     this.root = typeof root === 'string' ? document.querySelector(root) : root;
-    this.source = normalizeMarkdownSource(source);
+    this.sourcePath = sourcePath;
     this.state = {
       slides: [],
       title: 'プレゼンテーション',
@@ -18,7 +19,8 @@ class SlideDeckApp {
   async init() {
     this.root.innerHTML = '<div class="loader">スライドを準備中…</div>';
     try {
-      const markdown = await loadDeckMarkdown(this.source);
+
+      const markdown = await fetchMarkdown(this.sourcePath);
       const deck = parseMarkdownSlides(markdown);
       if (!deck.slides.length) {
         throw new Error('スライドデータが見つかりませんでした。');
@@ -592,4 +594,5 @@ window.addEventListener('DOMContentLoaded', () => {
     sourcePath: 'slides/story_presentation.md',
     inlineElement,
   });
+
 });
