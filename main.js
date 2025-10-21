@@ -1,4 +1,5 @@
 class SlideDeckApp {
+
   constructor(root, sourcePath) {
     this.root = typeof root === 'string' ? document.querySelector(root) : root;
     this.sourcePath = sourcePath;
@@ -18,6 +19,7 @@ class SlideDeckApp {
   async init() {
     this.root.innerHTML = '<div class="loader">スライドを準備中…</div>';
     try {
+
       const markdown = await fetchMarkdown(this.sourcePath);
       const deck = parseMarkdownSlides(markdown);
       if (!deck.slides.length) {
@@ -493,6 +495,104 @@ function splitSlideHeading(rawTitle) {
   return [rawTitle.trim(), ''];
 }
 
+async function loadDeckMarkdown(source) {
+  const normalized = source || {};
+  const inlineMarkdown = getInlineMarkdownFromSource(normalized);
+  const hasInline = typeof inlineMarkdown === 'string' && inlineMarkdown.length > 0;
+
+  if (normalized.path) {
+    if (window.location.protocol === 'file:' && hasInline) {
+      console.info('ローカルファイルとして開いているため、埋め込みMarkdownを使用します。');
+      return inlineMarkdown;
+    }
+    if (window.location.protocol !== 'file:') {
+      try {
+        return await fetchMarkdown(normalized.path);
+      } catch (error) {
+        if (hasInline) {
+          console.warn('Markdownの取得に失敗したため、埋め込みデータを利用します。', error);
+          return inlineMarkdown;
+        }
+        throw error;
+      }
+    }
+    return fetchMarkdown(normalized.path);
+  }
+
+  if (hasInline) {
+    return inlineMarkdown;
+  }
+
+  throw new Error('Markdownソースが見つかりませんでした。');
+}
+
+function normalizeMarkdownSource(source) {
+  if (source === undefined || source === null) {
+    return {};
+  }
+  if (typeof source === 'string') {
+    return { path: source };
+  }
+
+  const normalized = {};
+  if (typeof source.sourcePath === 'string') {
+    normalized.path = source.sourcePath;
+  } else if (typeof source.path === 'string') {
+    normalized.path = source.path;
+  }
+
+  if (typeof source.inlineMarkdown === 'string') {
+    normalized.inlineText = source.inlineMarkdown;
+  } else if (typeof source.inlineText === 'string') {
+    normalized.inlineText = source.inlineText;
+  }
+
+  const hasElementConstructor = typeof Element !== 'undefined';
+  if (hasElementConstructor && source.inlineElement instanceof Element) {
+    normalized.inlineElement = source.inlineElement;
+  } else if (!hasElementConstructor && source.inlineElement) {
+    normalized.inlineElement = source.inlineElement;
+  }
+
+  if (typeof source.inlineSelector === 'string') {
+    normalized.inlineSelector = source.inlineSelector;
+  }
+
+  return normalized;
+}
+
+function getInlineMarkdownFromSource(source) {
+  if (!source) {
+    return '';
+  }
+
+  if (typeof source.inlineCache === 'string') {
+    return source.inlineCache;
+  }
+
+  if (typeof source.inlineText === 'string' && source.inlineText.trim().length > 0) {
+    source.inlineCache = source.inlineText.trim();
+    return source.inlineCache;
+  }
+
+  let element = source.inlineElement;
+  if (!element && typeof source.inlineSelector === 'string' && typeof document !== 'undefined') {
+    element = document.querySelector(source.inlineSelector);
+  }
+
+  if (element && typeof element.textContent === 'string') {
+    source.inlineCache = element.textContent.trim();
+    return source.inlineCache;
+  }
+
+  return '';
+}
+
 window.addEventListener('DOMContentLoaded', () => {
-  new SlideDeckApp('#app', 'slides/story_presentation.md');
+  const inlineElement = document.getElementById('deck-inline-markdown');
+  new SlideDeckApp('#app', {
+    sourcePath: 'slides/story_presentation.md',
+    inlineElement,
+  });
+
 });
