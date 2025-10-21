@@ -1,3 +1,5 @@
+'use strict';
+
 class SlideDeckApp {
 
   constructor(root, source) {
