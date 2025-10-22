@@ -13,6 +13,7 @@ class SlideDeckApp {
       syncingHash: false,
     };
     this.elements = {};
+    this.animationFrameHandles = new WeakMap();
     if (this.root) {
       this.init();
     }
@@ -190,6 +191,7 @@ class SlideDeckApp {
     };
 
     document.title = `${title}｜HTMLプレゼンビューア`;
+    this.prepareSlideAnimations();
   }
 
   renderError(error) {
@@ -325,6 +327,9 @@ class SlideDeckApp {
       slide.tabIndex = isActive ? 0 : -1;
       if (isActive) {
         slide.focus({ preventScroll: true });
+        this.restartSlideAnimation(slide);
+      } else {
+        this.resetSlideAnimation(slide);
       }
     });
 
@@ -338,8 +343,15 @@ class SlideDeckApp {
       progressText.textContent = `${activeIndex + 1} / ${slides.length}`;
     }
     if (progressFill) {
-      const ratio = ((activeIndex + 1) / slides.length) * 100;
-      progressFill.style.width = `${ratio}%`;
+      const ratio = (activeIndex + 1) / slides.length;
+      progressFill.style.width = `${ratio * 100}%`;
+      const glowStrength = Math.min(0.35 + ratio * 0.35, 0.7);
+      progressFill.style.boxShadow = `0 0 20px rgba(59, 130, 246, ${glowStrength})`;
+    }
+
+    if (this.elements.stage) {
+      const ratioValue = (activeIndex + 1) / slides.length;
+      this.elements.stage.style.setProperty('--progress-ratio', ratioValue.toFixed(4));
     }
 
     if (overviewItems) {
@@ -361,6 +373,61 @@ class SlideDeckApp {
     const index = Number.parseInt(match[1], 10) - 1;
     if (Number.isNaN(index)) return undefined;
     return Math.max(0, Math.min(index, this.state.slides.length - 1));
+  }
+
+  prepareSlideAnimations() {
+    if (!this.elements || !Array.isArray(this.elements.slides)) {
+      return;
+    }
+    this.elements.slides.forEach((slide) => {
+      const fragments = this.getSlideFragments(slide);
+      fragments.forEach((element, index) => {
+        const delay = Math.min(index * 70, 1400);
+        element.style.setProperty('--stagger', `${delay}ms`);
+      });
+    });
+  }
+
+  restartSlideAnimation(slide) {
+    if (!slide) return;
+    const scheduled = this.animationFrameHandles.get(slide);
+    if (scheduled) {
+      cancelAnimationFrame(scheduled);
+    }
+    slide.classList.remove('is-animated');
+    void slide.offsetWidth;
+    const frameId = requestAnimationFrame(() => {
+      slide.classList.add('is-animated');
+      this.animationFrameHandles.delete(slide);
+    });
+    this.animationFrameHandles.set(slide, frameId);
+  }
+
+  resetSlideAnimation(slide) {
+    if (!slide) return;
+    const scheduled = this.animationFrameHandles.get(slide);
+    if (scheduled) {
+      cancelAnimationFrame(scheduled);
+      this.animationFrameHandles.delete(slide);
+    }
+    slide.classList.remove('is-animated');
+  }
+
+  getSlideFragments(slide) {
+    if (!slide) return [];
+    const content = slide.querySelector('.slide__content');
+    if (!content) return [];
+    const fragments = [];
+    Array.from(content.children).forEach((child) => {
+      if (child.matches('ul, ol')) {
+        fragments.push(child);
+        const items = Array.from(child.children).filter((el) => el.tagName === 'LI');
+        fragments.push(...items);
+      } else {
+        fragments.push(child);
+      }
+    });
+    return fragments;
   }
 }
 
