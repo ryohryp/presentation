@@ -12,16 +12,20 @@ async function main() {
   ]);
 
   const normalizedMarkdown = markdownRaw.replace(/\r\n/g, '\n').trimEnd();
-  const inlineBlockPattern = /    <script type="application\/markdown" id="deck-inline-markdown" hidden>\n[\s\S]*?\n    <\/script>/;
+
+  // <script ... id="deck-inline-markdown" ...> ... </script> をゆるくマッチ
+  // 1行/複数行どちらもOK、属性の順序・空白差にも耐える
+  const inlineBlockPattern =
+    /<script[^>]*\bid=["']deck-inline-markdown["'][^>]*>([\s\S]*?)<\/script>/i;
 
   if (!inlineBlockPattern.test(indexRaw)) {
     throw new Error('index.html に deck-inline-markdown スクリプトブロックが見つかりませんでした。');
   }
 
   const replacement =
-    '    <script type="application/markdown" id="deck-inline-markdown" hidden>\n' +
+    `<script type="application/markdown" id="deck-inline-markdown" hidden>\n` +
     normalizedMarkdown +
-    '\n    </script>';
+    `\n</script>`;
 
   const updatedIndex = indexRaw.replace(inlineBlockPattern, replacement);
   await writeFile(indexPath, updatedIndex, 'utf8');

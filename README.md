@@ -28,3 +28,21 @@
 オフライン配布に備えて `index.html` 内にMarkdownのスナップショットを保持しているため、ファイル単体での閲覧や共有が可能です。Markdownを更新した後にスタンドアロン版へ反映したい場合は `node tools/sync-inline-markdown.mjs` を実行すると、`index.html` の埋め込みデータが最新状態に差し替わります。
 
 
+
+
+## 配布前の同期（埋め込みMarkdown更新）
+- `node tools/sync-inline-markdown.mjs` を実行すると、`slides/story_presentation.md` の最新内容で `index.html` 内の `<script id="deck-inline-markdown">` が自動置換されます。
+- npmスクリプト例：
+```json
+{
+  "scripts": {
+    "sync": "node tools/sync-inline-markdown.mjs"
+  }
+}
+```
+
+## 印刷／PDFエクスポート
+- `styles.css` に `@media print` を追加しています。ブラウザの印刷機能からA4横／背景グラフィックONでPDF保存すると、配布用資料として整形されます。
+
+## “数値で語る”スライドの更新手順
+- `index.html` 内の **Slide 10.5** の仮数値を、アンケート確定値に置換してください（満足度・遵守率・反映件数・質疑本数）。

@@ -22,7 +22,6 @@ class SlideDeckApp {
   async init() {
     this.root.innerHTML = '<div class="loader">スライドを準備中…</div>';
     try {
-
       const markdown = await loadDeckMarkdown(this.source);
       const deck = parseMarkdownSlides(markdown);
       if (!deck.slides.length) {
@@ -84,7 +83,6 @@ class SlideDeckApp {
     actions.append(overviewButton);
 
     meta.append(progress, actions);
-
     header.append(titleEl, meta);
 
     const stage = document.createElement('div');
@@ -99,16 +97,16 @@ class SlideDeckApp {
       section.setAttribute('data-index', index);
       section.setAttribute('tabindex', '-1');
 
+      // ── 見出し（スライド上に常時表示） ─────────────────────────
       const heading = document.createElement('h2');
+      heading.setAttribute('role', 'heading');
+      heading.setAttribute('aria-level', '2');
+      heading.className = 'slide__heading';
+
       const [rawLabel, rawTitle] = splitSlideHeading(slide.title);
-      if (rawTitle) {
-        heading.innerHTML = `
-          <span class="slide__eyebrow">${escapeHtml(rawLabel)}</span>
-          <span class="slide__headline">${escapeHtml(rawTitle)}</span>
-        `;
-      } else {
-        heading.textContent = rawLabel;
-      }
+      const visibleTitle = (rawTitle && rawTitle.trim()) || (rawLabel || '').trim();
+      heading.textContent = visibleTitle || '（無題）';
+      // ───────────────────────────────────────────────────────────
 
       const content = document.createElement('div');
       content.className = 'slide__content';
@@ -140,7 +138,7 @@ class SlideDeckApp {
       const titleEl = document.createElement('span');
       titleEl.className = 'deck__overview-title';
       const [, titleText] = splitSlideHeading(slide.title);
-      titleEl.textContent = titleText || slide.title;
+      titleEl.textContent = (titleText || slide.title || '').trim();
 
       item.append(indexEl, titleEl);
       item.addEventListener('click', () => {
@@ -174,6 +172,8 @@ class SlideDeckApp {
 
     this.root.innerHTML = '';
     this.root.appendChild(deck);
+    this.executeEmbeddedScripts(this.elements.stage);
+
 
     this.elements = {
       deck,
@@ -363,7 +363,7 @@ class SlideDeckApp {
     const activeSlide = slides[activeIndex];
     if (activeSlide) {
       const [, titleText] = splitSlideHeading(activeSlide.title);
-      document.title = `${titleText || activeSlide.title}｜${this.state.title}`;
+      document.title = `${(titleText || activeSlide.title).trim()}｜${this.state.title}`;
     }
   }
 
@@ -429,6 +429,20 @@ class SlideDeckApp {
     });
     return fragments;
   }
+
+  executeEmbeddedScripts(container) {
+    if (!container) return;
+    const scripts = container.querySelectorAll('script');
+    scripts.forEach((old) => {
+      const s = document.createElement('script');
+      // type, src など属性を引き継ぐ
+      [...old.attributes].forEach(attr => s.setAttribute(attr.name, attr.value));
+      s.textContent = old.textContent;
+      // 置換（この時点で実行される）
+      old.replaceWith(s);
+    });
+  }
+
 }
 
 async function fetchMarkdown(path) {
@@ -460,7 +474,7 @@ function parseMarkdownSlides(markdown) {
       continue;
     }
     if (/^---\s*$/.test(line)) {
-      break;
+      continue;
     }
     if (line.startsWith('## ')) {
       pushSlide();
@@ -553,10 +567,8 @@ function escapeHtml(value) {
 }
 
 function splitSlideHeading(rawTitle) {
-  if (!rawTitle) {
-    return ['', ''];
-  }
-  const parts = rawTitle.split('｜');
+  if (!rawTitle) return ['', ''];
+  const parts = rawTitle.split('｜'); // 全角パイプ
   if (parts.length >= 2) {
     const [label, ...rest] = parts;
     return [label.trim(), rest.join('｜').trim()];
@@ -569,23 +581,19 @@ async function loadDeckMarkdown(source) {
   const inlineMarkdown = getInlineMarkdownFromSource(normalized);
   const hasInline = typeof inlineMarkdown === 'string' && inlineMarkdown.length > 0;
 
-  if (normalized.path) {
-    if (window.location.protocol === 'file:' && hasInline) {
-      console.info('ローカルファイルとして開いているため、埋め込みMarkdownを使用します。');
-      return inlineMarkdown;
-    }
-    if (window.location.protocol !== 'file:') {
-      try {
-        return await fetchMarkdown(normalized.path);
-      } catch (error) {
-        if (hasInline) {
-          console.warn('Markdownの取得に失敗したため、埋め込みデータを利用します。', error);
-          return inlineMarkdown;
-        }
-        throw error;
+  const isHttp = typeof location !== 'undefined' && /^https?:$/i.test(location.protocol);
+  if (normalized.path && isHttp) {
+    try {
+      // まずは常に外部Markdownを読み込みに行く（http/https でも file:// でも）
+      return await fetchMarkdown(normalized.path);
+    } catch (error) {
+      // 失敗したら埋め込み（あれば）にフォールバック
+      if (hasInline) {
+        console.warn('外部Markdownの読み込みに失敗 → 埋め込みデータを使用します。', error);
+        return inlineMarkdown;
       }
+      throw error;
     }
-    return fetchMarkdown(normalized.path);
   }
 
   if (hasInline) {
@@ -660,8 +668,7 @@ function getInlineMarkdownFromSource(source) {
 window.addEventListener('DOMContentLoaded', () => {
   const inlineElement = document.getElementById('deck-inline-markdown');
   new SlideDeckApp('#app', {
-    sourcePath: 'slides/story_presentation.md',
-    inlineElement,
+    sourcePath: 'slides/story_presentation.md', // ←これを使ってfetch
+    inlineElement: document.getElementById('deck-inline-markdown'),
   });
-
 });
